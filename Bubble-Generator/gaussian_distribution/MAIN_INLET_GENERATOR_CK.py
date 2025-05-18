@@ -19,19 +19,12 @@ import matplotlib.pyplot as plt
 
 print("Starting inlet modelling script.\n")
 
-# Read input from bash-script
-
-#print(sys.argv)
-#if len(sys.argv) != 16:
-#    sys.exit(
-#        "15 arguments should be used: case path - start time - end time - time step size - unit time - inlet name - "
-#        "gas density - liquid density - gas mass per tunit -tolerance on gas mass to be inserted per tunit- velocity - "
-#        "a boolean indicating whether prescribed bubbles may intersect with domain boundaries - a boolean indicating "
-#        "whether prescribed bubbles may interest with previously defined bubbles - the minimal mass per bubble - the "
-#        "maximal mass per bubble. ")
+####
+# Read input params
+####
 D=0.03*2
-A=D*0.216
-v_ratio=0.2#void fraction=alpha
+A=D*0.216#Area of CFD inlet
+alpha=0.2#void fraction
 verbose=1
 n_max=1000
 z=D
@@ -39,19 +32,26 @@ casePath = '.' #str(sys.argv[1])
 inletName = str('Inlet')#Name of the inlet boundary to be modelled
 rhog = float(1.18415)##Density of the gas
 rhol = float(997.561) #Density of the liquid
-U=float(0.174)#Velocity of the mixture, superficial velocity sum to be introduced in domain not the gap 0.589
+U=float(0.174)#Velocity of the mixture, superficial velocity sum to be introduced in domain not the gap velocity 0.589
 startTime = float(0)#Time step from where inlet should be modelled
 #Tunable parameters
-endTime = float(20)#20Last flow time to be defined
-timeStepSize = float(0.05)#Time step size to be used but does not need to match starccm+ as it will be interpolated
-tunit = 0.1 #round(timeStepSize*U,2)should be x10 >timeStepSize #Unit time scale - parameter for inlet modelling 
-rmin = 0.0002/2#smalless bubble radius
-rmax = 0.015/2#largest bubble radius
+#endTime = float(1)
+#endTime = float(5)
+endTime = float(20)#Last flow time to be defined
+timeStepSize = float(0.01)#float(0.05)#Time step size to be used but does not need to match starccm+ as it will be interpolated
+tunit = 0.1#0.25#should be x10 >timeStepSize #Unit time scale - parameter for inlet modelling 
 #mg=0.011#kg/s from T5 Treffle EXP
 #mg=A*rhog*Usg of air in EXP
-mg_tunit = float(A*v_ratio*rhog*U)*tunit#mg*tunit#Amount of the gas to be introduced in domain over a time 'tunit'
-print('mg_tunit',mg_tunit)
-mgb_min=((4.0/3.0)*math.pi*rmin**3)*rhog#0.0025*(A*v_ratio*rhog*U)*tunit#0.05*mg_tunit
+#but on my CFD inlet area
+# A*alpha=area occupied by gas
+#mg_tunit = float(A*alpha*rhog*U)*tunit#Amount of the gas to be introduced in domain over a time 'tunit'
+Ugs= 0.135 #superficial gas velocity
+mg_tunit = float(A*alpha*rhog*Ugs)*tunit#Amount of the gas to be introduced in domain over a time 'tunit'
+#mg_tunit = float(0.0022*tunit)#mg*tunit
+
+rmin = 0.0002/2#smalless bubble radius
+mgb_min=((4.0/3.0)*math.pi*rmin**3)*rhog#0.0025*(A*alpha*rhog*U)*tunit#0.05*mg_tunit
+rmax = 0.015/2#largest bubble radius
 mgb_max=((4.0/3.0)*math.pi*rmax**3)*rhog#0.2*mg_tunit#
 tol_mg=float(1e-5)#tol_mg = float(mg_tunit*0.1)#Tolerenace on the amount of gas to be introduced  in domain over a time 'tunit' 
 
@@ -60,7 +60,7 @@ if verbose: print('min/max',mgb_min,mgb_max)
 intersectBoundary = str(True)#Boolean indicating whether prescribed bubble shapes may intersect with the domain boundaries
 intersectBubble = str(True)#Boolean indicating whether prescribed bubble shapes may intersect with previously defined bubbles
 
-
+###Checks of time interval
 if int((endTime-startTime)/tunit) != ((endTime-startTime)/tunit):
     sys.exit("The desired time interval (endTime - startTime) should be a multiple of tunit.")
 if endTime <= startTime:
@@ -72,11 +72,13 @@ if (abs(int(tunit/timeStepSize) - tunit/timeStepSize) >= timeStepSize) and (abs(
 # Inlet geometry and normal to the inlet condition prepared with 'TubeBundle_readInlet_<CFD-programme>.py' 
 #==================================================
 # Creating input coordinates list. Face areas should be just 
-# Need to check and match the geo of the actual inlet
-#m3-220*20
-nx=220
-nz=20
-#ny=10#360
+# Match the geo of the actual inlet and let starccm+ do the interpolation on the mesh
+# the grid used should be finer or at least than the mesh used in starccm+ 
+#m3=160*20
+#m4=160x40
+nx=240
+nz=60
+#ny=5#360
 x=np.linspace(-0.108,0.108,nx)
 #y=np.linspace(-4.0800e-01, 1.0800e-01,ny)
 z=np.linspace(0,0.06,nz)
@@ -86,13 +88,6 @@ dz=z[1]-z[0]
 
 xv, zv = np.meshgrid(x,z)
 #xv, zv, yv = np.meshgrid(x, z, y)
-#x^2+y^2<0.0105^2
-#criterion_x = np.logical_and(xv >= -0.108, xv <= 0.108)
-#criterion_y = np.logical_and(yv >= -4.0800e-01, yv <= 4.0800e-01)
-#xvc=xv[criterion_x]
-#criterion_z=np.array(zv<=0.06)
-#zvc=zv[criterion_z]
-#yvc = np.ones(len(xvc))*(-4.0800e-01)#matching the y-coord of the inlet plane
 
 #construct the 2-D or 3D coordinate list
 #flatten the 2D arrays into 1D arrays
@@ -288,21 +283,6 @@ def bubbleShape(C_ID, C_t, timeInterval, shapeID, mgb, mgb_min, mgb_max, mg_Stil
 # in bubble are defined in the bubble shapes.
 # The former is 
 
-#class Bubble:
-#    def __init__(self, coord,t,r):
-        
-#class BubbleList:
-#    def __init__(self,t_thresh=0.01):
-#        self.list=[]
-#    def add(self, bubble):
-#        self.list.append(bubble)
-#    def check(self, bubble, buf_ratio):
-#        for 
-#    def cleanUp(self,t_thresh=):
-#        for bub in self.list:
-#            if bub.t
-        
-
 nIntervals = int((endTime-startTime)/tunit)  # Number of intervals [0,tunit[
 print("Between startTime " + str(startTime) + "s and endTime " + str(endTime) + "s, " + str(
     nIntervals) + " intervals of " + str(tunit) + "s need to be defined.")
@@ -346,14 +326,39 @@ for t in np.arange(nIntervals):
     print("Time interval " + str(t) + " has been defined: "+str(mg_defined)+"kg of gas was inserted. (desired: "+str(mg_tunit)+"kg).")
 print("Inlet was modelled successfully. \n")     
 
+
 fig, ax = plt.subplots()
-X,Y,Z=coordList[:,1],coordList[:,3],VOFwVal[:,-8,0]
-ax.tricontour(X,Y,Z,levels=20,colors='k')
-cntr=ax.tricontourf(X,Y,Z,cmap="RdBu_r")
+#Z=VOFwVal[:,-8,0]
+Z=VOFwVal[:,-8,0]
+
+Z = Z.reshape(zv.shape)
+cntr=ax.contourf(xv,zv,Z,cmap="RdBu_r")
+
+# 3D-y defined
+# Collapse y-dimension by taking mean over axis=2 (y-axis) to get a 2D array for contourf
+#Z_2d = np.mean(Z, axis=2)
+# Use the original meshgrid for plotting
+#cntr = ax.contourf(xv[:, :, 0], zv[:, :, 0], Z_2d, cmap="RdBu_r")
+
 fig.colorbar(cntr,ax=ax)
-ax.plot(X,Y,'ko',ms=3)
 ax.set(xlim=(-0.108,0.108),ylim=(0,D))
+ax.axis('equal')
 ax.set_title(f'Bubble Inlet at timestep {endTime}')
+ax.set_xlabel('x[m]')
+ax.set_ylabel('z[m]')
+
+#fig, ax = plt.subplots()
+#X,Y,Z=coordList[:,1],coordList[:,3],VOFwVal[:,-8,0]
+#ax.tricontour(X,Y,Z,levels=20,colors='k')#triangulates the mesh, no need for structured mesh
+#cntr=ax.contourf(X,Y,Z,cmap="RdBu_r")
+#fig.colorbar(cntr,ax=ax)
+#ax.plot(X,Y,'ko',ms=1)
+#ax.set(xlim=(-0.108,0.108),ylim=(0,D))
+#ax.axis('equal')
+#ax.set_title(f'Bubble Inlet at timestep {endTime}')
+
+print("Saving inlet profile to CSV-files. ")
+#file = 'bubbles_time_0p01_vf_ck=0.2-test.csv'
 
 #plt.show()
 plt.savefig('inletDefinition-VOFw.png', dpi=100, bbox_inches='tight')
@@ -364,7 +369,7 @@ plt.savefig('inletDefinition-VOFw.png', dpi=100, bbox_inches='tight')
 # Check: convert to file compatible with ParaView to visualize your pre-inlet domain.
 
 print("Saving inlet profile to CSV-files. ")
-file = "bubbles_time_001_vf_ck_Ugs_0p174_"+str(int(endTime))+"s.csv"
+file = "bubbles_time_001_vf_ck_Umix_0p174_"+str(int(endTime))+"s-test.csv"
 #f = open(file, 'w')
 #f.write('x-coord,y-coord,z-coord,time,VOLFwVal,u,v,w\n')
 #for j in np.arange(len(timeVal)):
@@ -379,7 +384,7 @@ file = "bubbles_time_001_vf_ck_Ugs_0p174_"+str(int(endTime))+"s.csv"
 #
 #
 #print("Script 'inletModelling' completed. \n")
-#print('target ratio {}, actual ratio {}'.format(v_ratio,len(VOFwVal[VOFwVal==0])/len(VOFwVal.flatten())))
+#print('target ratio {}, actual ratio {}'.format(alpha,len(VOFwVal[VOFwVal==0])/len(VOFwVal.flatten())))
 
 
 ## Check: convert to file compatible with ParaView to visualize your pre-inlet domain.
