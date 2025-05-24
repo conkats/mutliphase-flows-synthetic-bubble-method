@@ -9,8 +9,6 @@ SBM inlet modelling script
 # to give a certain mass flux over a unit time and finally written to an appropriate format to serve as a transient
 # inlet model for CFD calculations in STARCCM+.
 
-
-
 # import of utilities
 import math
 import numpy as np
@@ -22,7 +20,6 @@ import matplotlib.pyplot as plt
 print("Starting inlet modelling script.\n")
 
 # Geometry parameters
-
 D=0.03*2
 A= D*0.216
 v_ratio=0.2
